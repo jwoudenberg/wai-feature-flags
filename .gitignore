@@ -1,0 +1,5 @@
+*.cabal
+dist-newstyle
+result
+dist
+*.tar.gz

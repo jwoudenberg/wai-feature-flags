@@ -1,0 +1,20 @@
+name: wai-feature-flags
+version: 0.1.0.0
+synopsis: Feature flag support for WAI applications.
+description: Please see the README at <https://github.com/jwoudenberg/wai-feature-flags>.
+author: Jasper Woudenberg
+maintainer: mail@jasperwoudenberg.com
+copyright: 2019 Jasper Woudenberg
+homepage: https://github.com/jwoudenberg/wai-feature-flags#readme
+license-file: LICENSE
+category: Web
+github: jwoudenberg/wai-feature-flags
+extra-doc-files:
+- README.md
+- CHANGELOG.md
+library:
+  dependencies:
+  - base >= 4.10.1.0 && < 5
+  exposed-modules:
+  - Network.FeatureFlags
+  source-dirs: src
