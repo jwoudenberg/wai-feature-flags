@@ -1,14 +1,38 @@
-module Network.FeatureFlags (Store (..), memoryStore) where
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DefaultSignatures #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE UndecidableInstances #-}
 
+module Network.FeatureFlags
+  ( Store (..),
+    Flags,
+    fetch,
+    memoryStore,
+  )
+where
+
+import Data.Bifunctor (first)
 import qualified Data.ByteString as B
 import qualified Data.HashMap.Strict as Map
 import qualified Data.IORef as IORef
+import Data.Kind (Type)
 import qualified Data.Maybe as Maybe
-import qualified Data.Proxy as Proxy
+import Data.Proxy (Proxy (Proxy))
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import qualified Data.Text.Read as Read
 import qualified Data.Word as Word
+import GHC.Generics
+import GHC.TypeLits (ErrorMessage (..), KnownSymbol, TypeError, symbolVal)
+import System.Random (StdGen, getStdRandom, randomR)
 
 data Store
   = Store
@@ -25,6 +49,12 @@ memoryStore = do
         IORef.atomicModifyIORef' ref (\xs -> (Map.insert key value xs, ()))
     }
 
+fetch :: forall flags. Flags flags => Store -> IO flags
+fetch store = do
+  let keys = flags (Proxy :: Proxy flags)
+  states <- state keys store
+  getStdRandom (generate states)
+
 data Percent = Percent Word.Word
 
 percent :: Word.Word -> Percent
@@ -32,9 +62,85 @@ percent = Percent . min 100
 
 class Flags flags where
 
-  read :: Map.HashMap T.Text Percent -> IO flags
+  generate :: Map.HashMap T.Text Percent -> StdGen -> (flags, StdGen)
 
-  flags :: Proxy.Proxy flags -> [T.Text]
+  flags :: Proxy flags -> [T.Text]
+
+  default generate :: (Generic flags, GFlags (Rep flags)) => Map.HashMap T.Text Percent -> StdGen -> (flags, StdGen)
+  generate = undefined
+
+  default flags :: (Generic flags, GFlags (Rep flags)) => Proxy flags -> [T.Text]
+  flags = undefined
+
+class GFlags flags where
+
+  ggenerate :: Map.HashMap T.Text Percent -> StdGen -> (flags g, StdGen)
+
+  gflags :: Proxy flags -> [T.Text]
+
+instance GFlags fields => GFlags (D1 m (C1 ('MetaCons s f 'True) fields)) where
+
+  ggenerate states gen = first (M1 . M1) $ ggenerate states gen
+
+  gflags _ = gflags (Proxy :: Proxy fields)
+
+instance (GFlags l, GFlags r) => GFlags (l :*: r) where
+
+  ggenerate states gen =
+    let (lval, gen') = ggenerate states gen
+        (rval, gen'') = ggenerate states gen'
+     in (lval :*: rval, gen'')
+
+  gflags _ = gflags (Proxy :: Proxy l) <> gflags (Proxy :: Proxy r)
+
+instance
+  ( KnownSymbol fieldName,
+    FromBool (IsBool bool) bool
+  ) =>
+  GFlags (S1 ('MetaSel ('Just fieldName) su ss ds) (K1 i bool))
+  where
+
+  ggenerate states gen =
+    first (M1 . K1 . fromBool (Proxy :: Proxy (IsBool bool))) $
+      case Map.lookup (T.pack $ symbolVal (Proxy :: Proxy fieldName)) states of
+        Nothing -> (False, gen)
+        Just (Percent 0) -> (False, gen)
+        Just (Percent 100) -> (True, gen)
+        Just state -> roll gen state
+
+  gflags _ = [T.pack $ symbolVal (Proxy :: Proxy fieldName)]
+
+type family IsBool (b :: Type) :: Bool where
+  IsBool Bool = 'True
+  IsBool _ = 'False
+
+class FromBool (b :: Bool) a where
+  fromBool :: Proxy b -> Bool -> a
+
+instance FromBool 'True Bool where
+  fromBool _ = id
+
+instance TypeError InvalidFlagsTypeMessage => FromBool 'False a where
+  fromBool = error "unreachable"
+
+instance TypeError InvalidFlagsTypeMessage => GFlags (D1 m (C1 ('MetaCons s f 'False) a)) where
+
+  ggenerate = error "unreachable"
+
+  gflags = error "unreachable"
+
+type InvalidFlagsTypeMessage =
+  'Text "Not a valid flags type."
+    :$$: 'Text "A flags type needs to be a record with boolean fields."
+    :$$: 'Text "For example:"
+    :$$: 'Text "  data Flags ="
+    :$$: 'Text "     Flags { showErrorPage    :: Bool"
+    :$$: 'Text "           , throttleRequests :: Bool }"
+
+roll :: StdGen -> Percent -> (Bool, StdGen)
+roll gen (Percent trueChance) =
+  let (randomPercentage, gen') = randomR (1, 100) gen
+   in (trueChance >= randomPercentage, gen')
 
 update :: T.Text -> Percent -> Store -> IO ()
 update flag (Percent percentage) store =
@@ -43,9 +149,9 @@ update flag (Percent percentage) store =
     (TE.encodeUtf8 flag)
     (TE.encodeUtf8 (T.pack (show (min 100 percentage))))
 
-state :: Flags flags => Proxy.Proxy flags -> Store -> IO (Map.HashMap T.Text Percent)
-state proxy store = do
-  let defaults = zip (flags proxy) (repeat (Percent 0))
+state :: [T.Text] -> Store -> IO (Map.HashMap T.Text Percent)
+state keys store = do
+  let defaults = zip keys (repeat (Percent 0))
   stored <- Maybe.catMaybes . map decodeFlag <$> readKeys store
   pure $ Map.fromList $ stored <> defaults
 
