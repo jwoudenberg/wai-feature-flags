@@ -14,11 +14,17 @@
 {-# LANGUAGE UndecidableInstances #-}
 
 module Network.FeatureFlags
-  ( Store (..),
+  ( -- * Store
+    Store (..),
+    memoryStore,
+
+    -- * Flags
     Flags,
     fetch,
-    memoryStore,
-    application,
+
+    -- * Feature flag frontend
+    mkApplication,
+    mkMiddleware,
   )
 where
 
@@ -41,9 +47,18 @@ import qualified Network.Wai as Wai
 import qualified Paths_wai_feature_flags as Paths
 import System.Random (StdGen, getStdRandom, randomR)
 
-application :: Flags flags => Proxy flags -> Store -> Wai.Application
-application flagsType store req respond = do
+mkApplication :: Flags flags => Store flags -> IO Wai.Application
+mkApplication store = do
+  middleware <- mkMiddleware store
+  pure (middleware always404)
+
+mkMiddleware :: Flags flags => Store flags -> IO Wai.Middleware
+mkMiddleware store = do
   frontend <- Paths.getDataFileName "frontend/index.html"
+  pure (middleware frontend store)
+
+middleware :: Flags flags => FilePath -> Store flags -> Wai.Middleware
+middleware frontend store app req respond = do
   case (Wai.requestMethod req, Wai.pathInfo req) of
     ("GET", []) ->
       respond $
@@ -53,7 +68,7 @@ application flagsType store req respond = do
           frontend
           Nothing
     ("GET", ["flags"]) -> do
-      states <- state (flags flagsType) store
+      states <- state (flags store) store
       respond $
         Wai.responseLBS
           (toEnum 200)
@@ -67,15 +82,18 @@ application flagsType store req respond = do
         Just percent -> do
           update flagName percent store
           respond (Wai.responseLBS (toEnum 200) [] "")
-    _ -> respond (Wai.responseLBS (toEnum 404) [] "")
+    _ -> app req respond
 
-data Store
+always404 :: Wai.Application
+always404 _ respond = respond (Wai.responseLBS (toEnum 404) [] "")
+
+data Store flags
   = Store
       { readKeys :: IO [(B.ByteString, B.ByteString)],
         writeKey :: B.ByteString -> B.ByteString -> IO ()
       }
 
-memoryStore :: IO Store
+memoryStore :: IO (Store flags)
 memoryStore = do
   ref <- IORef.newIORef Map.empty
   pure
@@ -85,7 +103,7 @@ memoryStore = do
           IORef.atomicModifyIORef' ref (\xs -> (Map.insert key value xs, ()))
       }
 
-fetch :: forall flags. Flags flags => Store -> IO flags
+fetch :: forall flags. Flags flags => Store flags -> IO flags
 fetch store = do
   let keys = flags (Proxy :: Proxy flags)
   states <- state keys store
@@ -99,18 +117,18 @@ percent = Percent . min 100
 class Flags flags where
   generate :: Map.HashMap T.Text Percent -> StdGen -> (flags, StdGen)
 
-  flags :: Proxy flags -> [T.Text]
+  flags :: proxy flags -> [T.Text]
 
   default generate :: (Generic flags, GFlags (Rep flags)) => Map.HashMap T.Text Percent -> StdGen -> (flags, StdGen)
   generate states gen = first GHC.Generics.to $ ggenerate states gen
 
-  default flags :: (Generic flags, GFlags (Rep flags)) => Proxy flags -> [T.Text]
+  default flags :: (Generic flags, GFlags (Rep flags)) => proxy flags -> [T.Text]
   flags _ = gflags (Proxy :: Proxy (Rep flags))
 
 class GFlags flags where
   ggenerate :: Map.HashMap T.Text Percent -> StdGen -> (flags g, StdGen)
 
-  gflags :: Proxy flags -> [T.Text]
+  gflags :: proxy flags -> [T.Text]
 
 instance GFlags fields => GFlags (D1 m (C1 ('MetaCons s f 'True) fields)) where
   ggenerate states gen = first (M1 . M1) $ ggenerate states gen
@@ -172,14 +190,14 @@ roll gen (Percent trueChance) =
   let (randomPercentage, gen') = randomR (1, 100) gen
    in (trueChance >= randomPercentage, gen')
 
-update :: T.Text -> Percent -> Store -> IO ()
+update :: T.Text -> Percent -> Store flags -> IO ()
 update flag (Percent percentage) store =
   writeKey
     store
     (TE.encodeUtf8 flag)
     (TE.encodeUtf8 (T.pack (show (min 100 percentage))))
 
-state :: [T.Text] -> Store -> IO (Map.HashMap T.Text Percent)
+state :: [T.Text] -> Store flags -> IO (Map.HashMap T.Text Percent)
 state keys store = do
   let defaults = zip keys (repeat (Percent 0))
   stored <- Maybe.catMaybes . map decodeFlag <$> readKeys store

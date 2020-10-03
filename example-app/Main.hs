@@ -7,7 +7,6 @@ module Main
 where
 
 import Data.Foldable (asum)
-import Data.Proxy (Proxy (Proxy))
 import GHC.Generics (Generic)
 import qualified Network.FeatureFlags as FeatureFlags
 import qualified Network.Wai as Wai
@@ -16,17 +15,16 @@ import qualified Network.Wai.Handler.Warp as Warp
 main :: IO ()
 main = do
   store <- FeatureFlags.memoryStore
-  Warp.run 8080 (application store)
+  featureFlagsAdmin <- FeatureFlags.mkApplication store
+  Warp.run 8080 (application store featureFlagsAdmin)
 
-application :: FeatureFlags.Store -> Wai.Application
-application store req respond = do
+application :: FeatureFlags.Store Flags -> Wai.Application -> Wai.Application
+application store featureFlagsAdmin req respond = do
   flags <- FeatureFlags.fetch store
   case (Wai.requestMethod req, Wai.pathInfo req) of
     -- Mount feature flags page at /admin/flags.
     (_, "admin" : "flags" : rest) ->
-      FeatureFlags.application
-        (Proxy :: Proxy Flags)
-        store
+      featureFlagsAdmin
         req {Wai.pathInfo = rest}
         respond
     ("GET", ["window"]) ->
