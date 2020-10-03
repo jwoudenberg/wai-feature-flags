@@ -2,8 +2,10 @@
 {-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -19,6 +21,7 @@ module Network.FeatureFlags
   )
 where
 
+import qualified Data.Aeson as Aeson
 import Data.Bifunctor (first)
 import qualified Data.ByteString as B
 import qualified Data.HashMap.Strict as Map
@@ -32,7 +35,37 @@ import qualified Data.Text.Read as Read
 import qualified Data.Word as Word
 import GHC.Generics
 import GHC.TypeLits (ErrorMessage (..), KnownSymbol, TypeError, symbolVal)
+import qualified Network.Wai as Wai
+import qualified Paths_wai_feature_flags as Paths
 import System.Random (StdGen, getStdRandom, randomR)
+
+application :: Flags flags => Proxy flags -> Store -> Wai.Application
+application flagsType store req respond = do
+  frontend <- Paths.getDataFileName "frontend/index.html"
+  case (Wai.requestMethod req, Wai.pathInfo req) of
+    ("GET", []) ->
+      respond $
+        Wai.responseFile
+          (toEnum 200)
+          [("Content-Type", "text/html; charset=UTF-8")]
+          frontend
+          Nothing
+    ("GET", ["flags"]) -> do
+      states <- state (flags flagsType) store
+      respond $
+        Wai.responseLBS
+          (toEnum 200)
+          [("Content-Type", "application/json")]
+          (Aeson.encode states)
+    ("PUT", ["flags", flagName]) -> do
+      body <- Wai.lazyRequestBody req
+      case Aeson.decode body of
+        Nothing ->
+          respond (Wai.responseLBS (toEnum 400) [] "")
+        Just percent -> do
+          update flagName percent store
+          respond (Wai.responseLBS (toEnum 200) [] "")
+    _ -> respond (Wai.responseLBS (toEnum 404) [] "")
 
 data Store
   = Store
@@ -56,7 +89,7 @@ fetch store = do
   states <- state keys store
   getStdRandom (generate states)
 
-data Percent = Percent Word.Word
+newtype Percent = Percent Word.Word deriving (Aeson.ToJSON, Aeson.FromJSON)
 
 percent :: Word.Word -> Percent
 percent = Percent . min 100
