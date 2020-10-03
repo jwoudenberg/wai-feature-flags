@@ -12,22 +12,23 @@ import GHC.Generics (Generic)
 import qualified Network.FeatureFlags as FeatureFlags
 import qualified Network.Wai as Wai
 import qualified Network.Wai.Handler.Warp as Warp
-import qualified Network.Wai.UrlMap as UrlMap
 
 main :: IO ()
 main = do
   store <- FeatureFlags.memoryStore
-  let app =
-        UrlMap.mapUrls . asum $
-          [ UrlMap.mount "flags" (FeatureFlags.application (Proxy :: Proxy Flags) store),
-            UrlMap.mountRoot (application store)
-          ]
-  Warp.run 8080 app
+  Warp.run 8080 (application store)
 
 application :: FeatureFlags.Store -> Wai.Application
 application store req respond = do
   flags <- FeatureFlags.fetch store
   case (Wai.requestMethod req, Wai.pathInfo req) of
+    -- Mount feature flags page at /admin/flags.
+    (_, "admin" : "flags" : rest) ->
+      FeatureFlags.application
+        (Proxy :: Proxy Flags)
+        store
+        req {Wai.pathInfo = rest}
+        respond
     ("GET", ["window"]) ->
       respond $
         Wai.responseLBS
