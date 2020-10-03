@@ -2,6 +2,7 @@ module Main exposing (main)
 
 import Browser
 import Char
+import Css
 import Dict exposing (Dict)
 import Html.Styled as Html exposing (Html)
 import Html.Styled.Attributes as Attr
@@ -92,14 +93,25 @@ update msg model =
 
 view : Model -> Html Msg
 view model =
-    Html.div []
+    Html.div
+        [ Attr.css
+            [ Css.textAlign Css.center
+            , Css.fontFamilies [ "Helvetica Neue", "Helvetica", "Arial", "sans-serif" ]
+            , Css.color (Css.hex "#333")
+            , Css.backgroundColor (Css.hex "#fefefe")
+            , Css.position Css.absolute
+            , Css.minHeight (Css.vh 100)
+            , Css.width (Css.vw 100)
+            ]
+        ]
         (Html.h1 [] [ Html.text "Feature Flags" ]
             :: (case model of
                     Loading ->
                         [ Html.text "Loading..." ]
 
                     Loaded flags ->
-                        Dict.values (Dict.map viewFlag flags)
+                        Html.p [] [ Html.text "Every feature flag can be completely enabled, completely disabled, or enabled for a percentage of traffic." ]
+                            :: Dict.values (Dict.map viewFlag flags)
                )
         )
 
@@ -110,10 +122,35 @@ viewFlag name percentage =
         (Percentage current) =
             Persisted.value percentage
     in
-    Html.section []
-        [ Html.h2 [] [ Html.Styled.Lazy.lazy (Html.text << toSpaceCase) name ]
+    Html.section
+        [ Attr.css
+            [ case Persisted.value percentage of
+                Percentage 0 ->
+                    Css.batch []
+
+                Percentage 100 ->
+                    Css.batch
+                        [ Css.backgroundColor (Css.hex "#C1F0C1")
+                        ]
+
+                Percentage _ ->
+                    Css.batch
+                        [ Css.backgroundColor (Css.hex "#F0EEC1")
+                        ]
+            , Css.padding (Css.px 10)
+            ]
+        ]
+        [ Html.h2
+            [ Attr.css
+                [ Css.fontWeight Css.normal
+                , Css.fontSize (Css.em 1.4)
+                , Css.margin4 Css.zero Css.zero (Css.em 0.5) Css.zero
+                ]
+            ]
+            [ Html.Styled.Lazy.lazy (Html.text << toSpaceCase) name ]
         , Html.button
-            [ Events.onClick (SetFlag name (Percentage 0))
+            [ Attr.css [ inputStyle ]
+            , Events.onClick (SetFlag name (Percentage 0))
             ]
             [ Html.text "❌" ]
         , Html.input
@@ -122,13 +159,35 @@ viewFlag name percentage =
             , Attr.min "0"
             , Attr.max "100"
             , Attr.step "1"
+            , Attr.css
+                [ inputStyle
+                , Css.width (Css.px 60)
+                , Css.margin2 Css.zero (Css.px 10)
+                , Css.after
+                    [ Css.property "content" "%"
+                    ]
+                ]
             , Events.on "input" (Decode.map (handleFlagValue name) targetValueNumber)
             ]
             []
         , Html.button
-            [ Events.onClick (SetFlag name (Percentage 100))
+            [ Attr.css [ inputStyle ]
+            , Events.onClick (SetFlag name (Percentage 100))
             ]
             [ Html.text "✅" ]
+        ]
+
+
+inputStyle : Css.Style
+inputStyle =
+    Css.batch
+        [ Css.fontSize (Css.em 1.1)
+        , Css.height (Css.em 1.6)
+        , Css.border3 (Css.px 1) Css.solid (Css.hex "#ccc")
+        , Css.borderRadius (Css.px 2)
+        , Css.textAlign Css.center
+        , Css.boxSizing Css.borderBox
+        , Css.backgroundColor (Css.hex "#fefefe")
         ]
 
 
