@@ -18,6 +18,7 @@ module Network.FeatureFlags
     Flags,
     fetch,
     memoryStore,
+    application,
   )
 where
 

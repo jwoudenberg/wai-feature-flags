@@ -26,3 +26,11 @@ library:
   exposed-modules:
   - Network.FeatureFlags
   source-dirs: src
+executables:
+  example-app:
+    dependencies:
+    - base
+    - wai-feature-flags
+    - warp >= 3.3.5 && < 3.4
+    main: Main.hs
+    source-dirs: example-app
