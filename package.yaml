@@ -30,6 +30,8 @@ executables:
   example-app:
     dependencies:
     - base
+    - wai
+    - wai-extra >= 3.0.28 && < 3.2
     - wai-feature-flags
     - warp >= 3.3.5 && < 3.4
     main: Main.hs
