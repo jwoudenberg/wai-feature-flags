@@ -34,6 +34,7 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import qualified Data.Text.Read as Read
 import qualified Data.Word as Word
+import qualified Debug.Trace as Debug
 import GHC.Generics
 import GHC.TypeLits (ErrorMessage (..), KnownSymbol, TypeError, symbolVal)
 import qualified Network.Wai as Wai
@@ -182,7 +183,7 @@ state :: [T.Text] -> Store -> IO (Map.HashMap T.Text Percent)
 state keys store = do
   let defaults = zip keys (repeat (Percent 0))
   stored <- Maybe.catMaybes . map decodeFlag <$> readKeys store
-  pure $ Map.fromList $ stored <> defaults
+  pure $ Map.fromList $ defaults <> stored
 
 decodeFlag :: (B.ByteString, B.ByteString) -> Maybe (T.Text, Percent)
 decodeFlag (key, val) = do

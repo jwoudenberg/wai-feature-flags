@@ -1,4 +1,4 @@
-module Persisted exposing (Persisted, change, changed, init, persist)
+module Persisted exposing (Persisted, change, changed, init, persist, value)
 
 
 type Persisted a
@@ -27,3 +27,8 @@ persist x (Persisted old) =
 changed : Persisted a -> Bool
 changed (Persisted { persisted, local }) =
     local /= persisted
+
+
+value : Persisted a -> a
+value (Persisted { local }) =
+    local
