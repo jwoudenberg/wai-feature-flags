@@ -3,10 +3,10 @@ module Main exposing (main)
 import Browser
 import Char
 import Dict exposing (Dict)
-import Html exposing (Html)
-import Html.Attributes as Attr
-import Html.Events as Events
-import Html.Lazy
+import Html.Styled as Html exposing (Html)
+import Html.Styled.Attributes as Attr
+import Html.Styled.Events as Events
+import Html.Styled.Lazy
 import Http
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
@@ -39,7 +39,11 @@ main : Program () Model Msg
 main =
     Browser.document
         { init = \_ -> ( Loading, sendLoadFlagsRequest )
-        , view = \model -> { title = "Feature Flags", body = view model }
+        , view =
+            \model ->
+                { title = "Feature Flags"
+                , body = [ Html.toUnstyled (view model) ]
+                }
         , update = update
         , subscriptions = \_ -> Time.every (5 * 1000) (\_ -> LoadFlags)
         }
@@ -86,16 +90,18 @@ update msg model =
             )
 
 
-view : Model -> List (Html Msg)
+view : Model -> Html Msg
 view model =
-    Html.h1 [] [ Html.text "Feature Flags" ]
-        :: (case model of
-                Loading ->
-                    [ Html.text "Loading..." ]
+    Html.div []
+        (Html.h1 [] [ Html.text "Feature Flags" ]
+            :: (case model of
+                    Loading ->
+                        [ Html.text "Loading..." ]
 
-                Loaded flags ->
-                    Dict.values (Dict.map viewFlag flags)
-           )
+                    Loaded flags ->
+                        Dict.values (Dict.map viewFlag flags)
+               )
+        )
 
 
 viewFlag : FlagName -> Persisted Percentage -> Html Msg
@@ -105,7 +111,7 @@ viewFlag name percentage =
             Persisted.value percentage
     in
     Html.section []
-        [ Html.h2 [] [ Html.Lazy.lazy (Html.text << toSpaceCase) name ]
+        [ Html.h2 [] [ Html.Styled.Lazy.lazy (Html.text << toSpaceCase) name ]
         , Html.button
             [ Events.onClick (SetFlag name (Percentage 0))
             ]
