@@ -21,9 +21,16 @@ type Msg
     = LoadFlags
     | LoadedFlags (Dict FlagName Percentage)
     | SetFlag FlagName Percentage
+    | NoOp
 
 
-type Model
+type alias Model =
+    { rootPath : List String
+    , data : Data
+    }
+
+
+type Data
     = Loading
     | Loaded (Dict FlagName (Persisted Percentage))
 
@@ -38,8 +45,18 @@ type Percentage
 
 main : Program () Model Msg
 main =
-    Browser.document
-        { init = \_ -> ( Loading, sendLoadFlagsRequest )
+    Browser.application
+        { init =
+            \_ url _ ->
+                let
+                    rootPath =
+                        String.split "/" url.path
+                in
+                ( { rootPath = rootPath
+                  , data = Loading
+                  }
+                , sendLoadFlagsRequest rootPath
+                )
         , view =
             \model ->
                 { title = "Feature Flags"
@@ -47,17 +64,31 @@ main =
                 }
         , update = update
         , subscriptions = \_ -> Time.every (5 * 1000) (\_ -> LoadFlags)
+        , onUrlRequest = \_ -> NoOp
+        , onUrlChange = \_ -> NoOp
         }
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
+    let
+        ( newData, cmd ) =
+            updateData msg model
+    in
+    ( { model | data = newData }, cmd )
+
+
+updateData : Msg -> Model -> ( Data, Cmd Msg )
+updateData msg model =
     case msg of
+        NoOp ->
+            ( model.data, Cmd.none )
+
         LoadFlags ->
-            ( model, sendLoadFlagsRequest )
+            ( model.data, sendLoadFlagsRequest model.rootPath )
 
         LoadedFlags updatedFlags ->
-            case model of
+            case model.data of
                 Loading ->
                     ( Loaded (Dict.map (\_ -> Persisted.init) updatedFlags)
                     , Cmd.none
@@ -83,11 +114,11 @@ update msg model =
 
         SetFlag flagName newPercentage ->
             let
-                newModel =
-                    setFlag flagName newPercentage model
+                newData =
+                    setFlag flagName newPercentage model.data
             in
-            ( newModel
-            , saveFlag flagName newModel
+            ( newData
+            , saveFlag flagName { model | data = newData }
             )
 
 
@@ -105,7 +136,7 @@ view model =
             ]
         ]
         (Html.h1 [] [ Html.text "Feature Flags" ]
-            :: (case model of
+            :: (case model.data of
                     Loading ->
                         [ Html.text "Loading..." ]
 
@@ -213,10 +244,10 @@ handleFlagValue flagName newValue =
         |> SetFlag flagName
 
 
-sendLoadFlagsRequest : Cmd Msg
-sendLoadFlagsRequest =
+sendLoadFlagsRequest : List String -> Cmd Msg
+sendLoadFlagsRequest rootPath =
     Http.get
-        { url = Url.Builder.relative [ "flags" ] []
+        { url = Url.Builder.relative (rootPath ++ [ "flags" ]) []
         , expect =
             Http.expectJson
                 (\res ->
@@ -236,9 +267,9 @@ flagsDecoder =
     Decode.dict (Decode.map Percentage Decode.int)
 
 
-setFlag : FlagName -> Percentage -> Model -> Model
-setFlag flagName newPercentage model =
-    case model of
+setFlag : FlagName -> Percentage -> Data -> Data
+setFlag flagName newPercentage data =
+    case data of
         Loading ->
             Loading
 
@@ -252,7 +283,7 @@ setFlag flagName newPercentage model =
 
 saveFlag : FlagName -> Model -> Cmd Msg
 saveFlag flagName model =
-    case model of
+    case model.data of
         Loading ->
             Cmd.none
 
@@ -263,18 +294,18 @@ saveFlag flagName model =
 
                 Just percentage ->
                     if Persisted.changed percentage then
-                        sendSaveFlagRequest flagName (Persisted.value percentage)
+                        sendSaveFlagRequest model.rootPath flagName (Persisted.value percentage)
 
                     else
                         Cmd.none
 
 
-sendSaveFlagRequest : FlagName -> Percentage -> Cmd Msg
-sendSaveFlagRequest flagName (Percentage percentage) =
+sendSaveFlagRequest : List String -> FlagName -> Percentage -> Cmd Msg
+sendSaveFlagRequest rootPath flagName (Percentage percentage) =
     Http.request
         { method = "PUT"
         , headers = []
-        , url = Url.Builder.relative [ "flags", flagName ] []
+        , url = Url.Builder.relative (rootPath ++ [ "flags", flagName ]) []
         , body = Http.jsonBody (Encode.int percentage)
         , expect = Http.expectWhatever (\_ -> LoadFlags)
         , timeout = Nothing
