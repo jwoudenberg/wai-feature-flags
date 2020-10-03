@@ -43,11 +43,12 @@ data Store
 memoryStore :: IO Store
 memoryStore = do
   ref <- IORef.newIORef Map.empty
-  pure Store
-    { readKeys = Map.toList <$> IORef.readIORef ref,
-      writeKey = \key value ->
-        IORef.atomicModifyIORef' ref (\xs -> (Map.insert key value xs, ()))
-    }
+  pure
+    Store
+      { readKeys = Map.toList <$> IORef.readIORef ref,
+        writeKey = \key value ->
+          IORef.atomicModifyIORef' ref (\xs -> (Map.insert key value xs, ()))
+      }
 
 fetch :: forall flags. Flags flags => Store -> IO flags
 fetch store = do
@@ -61,7 +62,6 @@ percent :: Word.Word -> Percent
 percent = Percent . min 100
 
 class Flags flags where
-
   generate :: Map.HashMap T.Text Percent -> StdGen -> (flags, StdGen)
 
   flags :: Proxy flags -> [T.Text]
@@ -73,19 +73,16 @@ class Flags flags where
   flags = undefined
 
 class GFlags flags where
-
   ggenerate :: Map.HashMap T.Text Percent -> StdGen -> (flags g, StdGen)
 
   gflags :: Proxy flags -> [T.Text]
 
 instance GFlags fields => GFlags (D1 m (C1 ('MetaCons s f 'True) fields)) where
-
   ggenerate states gen = first (M1 . M1) $ ggenerate states gen
 
   gflags _ = gflags (Proxy :: Proxy fields)
 
 instance (GFlags l, GFlags r) => GFlags (l :*: r) where
-
   ggenerate states gen =
     let (lval, gen') = ggenerate states gen
         (rval, gen'') = ggenerate states gen'
@@ -99,7 +96,6 @@ instance
   ) =>
   GFlags (S1 ('MetaSel ('Just fieldName) su ss ds) (K1 i bool))
   where
-
   ggenerate states gen =
     first (M1 . K1 . fromBool (Proxy :: Proxy (IsBool bool))) $
       case Map.lookup (T.pack $ symbolVal (Proxy :: Proxy fieldName)) states of
@@ -124,7 +120,6 @@ instance TypeError InvalidFlagsTypeMessage => FromBool 'False a where
   fromBool = error "unreachable"
 
 instance TypeError InvalidFlagsTypeMessage => GFlags (D1 m (C1 ('MetaCons s f 'False) a)) where
-
   ggenerate = error "unreachable"
 
   gflags = error "unreachable"
