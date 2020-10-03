@@ -100,10 +100,10 @@ class Flags flags where
   flags :: Proxy flags -> [T.Text]
 
   default generate :: (Generic flags, GFlags (Rep flags)) => Map.HashMap T.Text Percent -> StdGen -> (flags, StdGen)
-  generate = undefined
+  generate states gen = first GHC.Generics.to $ ggenerate states gen
 
   default flags :: (Generic flags, GFlags (Rep flags)) => Proxy flags -> [T.Text]
-  flags = undefined
+  flags _ = gflags (Proxy :: Proxy (Rep flags))
 
 class GFlags flags where
   ggenerate :: Map.HashMap T.Text Percent -> StdGen -> (flags g, StdGen)
