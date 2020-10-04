@@ -24,7 +24,6 @@ module Network.FeatureFlags
 
     -- * Feature flag frontend
     mkApplication,
-    mkMiddleware,
   )
 where
 
@@ -48,17 +47,11 @@ import qualified Paths_wai_feature_flags as Paths
 import System.Random (StdGen, getStdRandom, randomR)
 
 mkApplication :: Flags flags => Store flags -> IO Wai.Application
-mkApplication store = do
-  middleware <- mkMiddleware store
-  pure (middleware always404)
+mkApplication store =
+  application store <$> Paths.getDataFileName "frontend/index.html"
 
-mkMiddleware :: Flags flags => Store flags -> IO Wai.Middleware
-mkMiddleware store = do
-  frontend <- Paths.getDataFileName "frontend/index.html"
-  pure (middleware frontend store)
-
-middleware :: Flags flags => FilePath -> Store flags -> Wai.Middleware
-middleware frontend store app req respond = do
+application :: Flags flags => Store flags -> FilePath -> Wai.Application
+application store frontend req respond = do
   case (Wai.requestMethod req, Wai.pathInfo req) of
     ("GET", []) ->
       respond $
@@ -82,10 +75,7 @@ middleware frontend store app req respond = do
         Just percent -> do
           update flagName percent store
           respond (Wai.responseLBS (toEnum 200) [] "")
-    _ -> app req respond
-
-always404 :: Wai.Application
-always404 _ respond = respond (Wai.responseLBS (toEnum 404) [] "")
+    _ -> respond (Wai.responseLBS (toEnum 404) [] "")
 
 data Store flags
   = Store
