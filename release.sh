@@ -8,7 +8,7 @@ bundle="$name-$version.tar.gz"
 
 # Generate code
 hpack
-pushd frontend; elm make src/Main.elm --output index.html; popd
+pushd frontend; elm make --optimize src/Main.elm --output index.html; popd
 
 # check changelog contains an entry for this version
 grep "^# $version$" < CHANGELOG.md
