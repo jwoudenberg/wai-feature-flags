@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 
 set -euo pipefail
+shopt -s globstar
 
 # Check all Haskell files are formatted using Ormolu
 LC_ALL=C.UTF-8 ormolu -m inplace src/**/*.hs
 # Check all Elm files are formatted using elm-format
-elm-format --validate ./frontend/src/**.elm
+elm-format --validate frontend/src/**.elm
 if git status --porcelain | grep . ; then
   echo "Not all files were formatted."
   echo "To fix this error, run ./test.sh and commit the result."
