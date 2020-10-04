@@ -1,3 +1,3 @@
-{ pkgs ? import ./nixpkgs.nix }:
+let pkgs = import ./nixpkgs.nix;
 
-pkgs.haskellPackages.callCabal2nix "bugsnag-hs" ./. { }
+in pkgs.haskellPackages.callCabal2nix "bugsnag-hs" ./. { }

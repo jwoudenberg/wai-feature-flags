@@ -1,7 +1,7 @@
-{ pkgs ? import ./nixpkgs.nix }:
+let pkgs = import ./nixpkgs.nix;
 
-pkgs.haskellPackages.shellFor {
-  packages = p: [ (pkgs.callPackage ./default.nix { }) ];
+in pkgs.haskellPackages.shellFor {
+  packages = p: [ (import ./default.nix) ];
   buildInputs = [
     # Haskell
     pkgs.cabal-install
