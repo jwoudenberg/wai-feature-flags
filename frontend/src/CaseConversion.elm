@@ -22,7 +22,7 @@ words string =
                 []
                 (\words_ ->
                     Parser.oneOf
-                        [ Parser.map (\word_ -> Parser.Loop (Debug.log "so far" (word_ :: words_))) word
+                        [ Parser.map (\word_ -> Parser.Loop (word_ :: words_)) word
                         , Parser.succeed (Parser.Done words_)
                         ]
                 )
@@ -43,9 +43,14 @@ word =
         |= (Parser.getChompedString <|
                 Parser.succeed ()
                     |. Parser.chompIf (not << isWhitespace)
-                    |. Parser.chompWhile (\c -> not (isWhitespace c) && not (Char.isUpper c))
+                    |. Parser.chompWhile startsWord
            )
         |. Parser.chompWhile isWhitespace
+
+
+startsWord : Char -> Bool
+startsWord c =
+    not (isWhitespace c || Char.isUpper c || Char.isDigit c)
 
 
 isWhitespace : Char -> Bool
