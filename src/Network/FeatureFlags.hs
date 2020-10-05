@@ -66,6 +66,7 @@ import qualified Data.Aeson as Aeson
 import Data.Bifunctor (first)
 import qualified Data.ByteString as B
 import qualified Data.HashMap.Strict as Map
+import qualified Data.HashSet as Set
 import qualified Data.IORef as IORef
 import Data.Kind (Type)
 import qualified Data.Maybe as Maybe
@@ -127,7 +128,9 @@ setFlag flag (Percent percentage) store =
 readFlagConfigs :: [T.Text] -> Store flags -> IO (Map.HashMap T.Text Percent)
 readFlagConfigs keys store = do
   let defaults = zip keys (repeat (Percent 0))
-  stored <- Maybe.catMaybes . map decodeFlagConfig <$> readKeys store
+  let keySet = Set.fromList keys
+  stored' <- Maybe.catMaybes . map decodeFlagConfig <$> readKeys store
+  let stored = filter (\(k, _) -> Set.member k keySet) stored'
   pure $ Map.fromList $ defaults <> stored
 
 decodeFlagConfig :: (B.ByteString, B.ByteString) -> Maybe (T.Text, Percent)
