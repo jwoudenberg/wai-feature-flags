@@ -4,4 +4,3 @@ result
 dist
 *.tar.gz
 elm-stuff
-frontend/index.html
