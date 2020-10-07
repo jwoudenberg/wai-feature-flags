@@ -80,7 +80,7 @@ import GHC.Generics
 import GHC.TypeLits (ErrorMessage (..), KnownSymbol, TypeError, symbolVal)
 import qualified Network.Wai as Wai
 import qualified Paths_wai_feature_flags as Paths
-import System.Random (StdGen, getStdRandom, randomR)
+import System.Random.SplitMix (SMGen, newSMGen, nextWord32)
 
 -- FRONTEND
 
@@ -179,13 +179,14 @@ fetch :: forall flags. Flags flags => Store flags -> IO flags
 fetch store = do
   let keys = flags (Proxy :: Proxy flags)
   configs <- readFlagConfigs keys store
-  getStdRandom (generate configs)
+  smgen <- newSMGen
+  pure . fst $ generate configs smgen
 
 -- PERCENT
 
-newtype Percent = Percent Word.Word deriving (Aeson.ToJSON, Aeson.FromJSON)
+newtype Percent = Percent Word.Word32 deriving (Aeson.ToJSON, Aeson.FromJSON)
 
-percent :: Word.Word -> Percent
+percent :: Word.Word32 -> Percent
 percent = Percent . min 100
 
 -- FLAGS
@@ -203,18 +204,18 @@ percent = Percent . min 100
 -- >
 -- > instance Flags Features
 class Flags flags where
-  generate :: Map.HashMap T.Text Percent -> StdGen -> (flags, StdGen)
+  generate :: Map.HashMap T.Text Percent -> SMGen -> (flags, SMGen)
 
   flags :: proxy flags -> [T.Text]
 
-  default generate :: (Generic flags, GFlags (Rep flags)) => Map.HashMap T.Text Percent -> StdGen -> (flags, StdGen)
+  default generate :: (Generic flags, GFlags (Rep flags)) => Map.HashMap T.Text Percent -> SMGen -> (flags, SMGen)
   generate configs gen = first GHC.Generics.to $ ggenerate configs gen
 
   default flags :: (Generic flags, GFlags (Rep flags)) => proxy flags -> [T.Text]
   flags _ = gflags (Proxy :: Proxy (Rep flags))
 
 class GFlags flags where
-  ggenerate :: Map.HashMap T.Text Percent -> StdGen -> (flags g, StdGen)
+  ggenerate :: Map.HashMap T.Text Percent -> SMGen -> (flags g, SMGen)
 
   gflags :: proxy flags -> [T.Text]
 
@@ -273,7 +274,8 @@ type InvalidFlagsTypeMessage =
     :$$: 'Text "     Flags { showErrorPage    :: Bool"
     :$$: 'Text "           , throttleRequests :: Bool }"
 
-roll :: StdGen -> Percent -> (Bool, StdGen)
+roll :: SMGen -> Percent -> (Bool, SMGen)
 roll gen (Percent trueChance) =
-  let (randomPercentage, gen') = randomR (1, 100) gen
-   in (trueChance >= randomPercentage, gen')
+  let (randomWord32, gen') = nextWord32 gen
+      between1And100 = 1 + (randomWord32 `mod` 100)
+   in (trueChance >= between1And100, gen')
