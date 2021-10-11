@@ -1,5 +1,5 @@
 name: wai-feature-flags
-version: 0.1.0.1
+version: 0.1.0.2
 synopsis: Feature flag support for WAI applications.
 description: Please see the README at <https://github.com/jwoudenberg/wai-feature-flags>.
 author: Jasper Woudenberg
