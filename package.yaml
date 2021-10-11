@@ -4,7 +4,7 @@ synopsis: Feature flag support for WAI applications.
 description: Please see the README at <https://github.com/jwoudenberg/wai-feature-flags>.
 author: Jasper Woudenberg
 maintainer: mail@jasperwoudenberg.com
-copyright: 2020 Jasper Woudenberg
+copyright: 2021 Jasper Woudenberg
 homepage: https://github.com/jwoudenberg/wai-feature-flags#readme
 license-file: LICENSE
 category: Web
