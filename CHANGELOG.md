@@ -1,3 +1,7 @@
+# 0.1.0.4
+
+- Support `aeson-2.1.x`.
+
 # 0.1.0.3
 
 - Support `text-2.0.x`.
