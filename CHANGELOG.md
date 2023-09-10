@@ -1,3 +1,7 @@
+# 0.1.0.7
+
+- Support `text-2.1.x`.
+
 # 0.1.0.6
 
 - Support `bytestring-0.12.x`.
