@@ -1,3 +1,7 @@
+# 0.1.0.8
+
+- Support `warp-3.4.x`.
+
 # 0.1.0.7
 
 - Support `text-2.1.x`.
